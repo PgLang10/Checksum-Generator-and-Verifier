@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Checksum Generator & Verifier</title>
+  <style>
+    :root{--accent:#2563eb;--bg:#0f172a;--card:#0b1220;--glass: rgba(255,255,255,0.03)}
+    body{font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;margin:0;background:linear-gradient(180deg,#071028 0%, #071530 100%);color:#e6eef8}
+    header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px}
+    header h1{font-size:18px;margin:0}
+    .top-buttons{display:flex;gap:8px}
+    button{background:var(--glass);border:1px solid rgba(255,255,255,0.04);padding:8px 12px;border-radius:8px;color:inherit;cursor:pointer}
+    main{display:grid;grid-template-columns:1fr 420px;gap:18px;padding:18px}
+    .card{background:rgba(255,255,255,0.03);padding:14px;border-radius:10px;border:1px solid rgba(255,255,255,0.03)}
+    label{display:block;margin:8px 0 6px;font-size:13px}
+    select,input[type="text"],textarea{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    .controls{display:flex;gap:8px;margin-top:10px}
+    .steps{height:420px;overflow:auto;padding:8px;background:rgba(0,0,0,0.25);border-radius:8px}
+    pre{white-space:pre-wrap;font-size:13px}
+    .small{font-size:12px;color:#b9c7dd}
+    .row{display:flex;gap:8px}
+    .row > *{flex:1}
+    footer{padding:8px 18px;text-align:center;color:#9fb0d4;font-size:13px}
+    .modal {
+  	position: fixed;
+  	inset: 0;
+  	display: none;
+  	align-items: center;
+  	justify-content: center;
+  	background: rgba(2,6,23,0.6);
+  	overflow-y: auto;             
+  	padding: 40px 0;              
+  	z-index: 1000;
+}
+    .modal .paper {
+  	width: 680px;
+  	max-width: 95%;
+  	background: #07122a;
+  	padding: 18px 20px;
+  	border-radius: 10px;
+  	border: 1px solid rgba(255,255,255,0.03);
+  	max-height: 90vh;              
+	overflow-y: auto;             
+}
+    .close{float:right}
+    .muted{color:#9fb0d4}
+    .chip{display:inline-block;padding:6px 8px;border-radius:999px;border:1px solid rgba(255,255,255,0.04);font-size:12px}
+    .flex{display:flex;gap:8px;align-items:center}
+/* ==== Dropdown (select) Styling Fix ==== */
+select {
+  background-color: #1e293b;   /* dark background */
+  color: #ffffff;              /* white text */
+  border: 1px solid #2563eb;   /* blue border to match theme */
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 5px rgba(37, 99, 235, 0.2);
+}
+
+/* Hover effect */
+select:hover {
+  background-color: #334155;
+  border-color: #3b82f6;
+  box-shadow: 0 0 8px rgba(37, 99, 235, 0.4);
+}
+
+/* When focused (clicked/selected) */
+select:focus {
+  background-color: #334155;
+  border-color: #60a5fa;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.6);
+}
+
+/* Options inside dropdown */
+option {
+  background-color: #1e293b;
+  color: #ffffff;
+}
+
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Checksum Generator & Verifier</h1>
+    <div class="top-buttons">
+      <button id="learnBtn">Learn</button>
+      <button id="devBtn">Developed by</button>
+      <button id="helpBtn">Help</button>
+      <button id="downloadBtn">Download</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <label>Mode</label>
+      <select id="mode">
+        <option value="sender">Sender (generate checksum)</option>
+        <option value="receiver">Receiver (verify message)</option>
+      </select>
+
+      <label>Input format</label>
+      <select id="format">
+        <option value="text">Text (ASCII)</option>
+        <option value="binary">Binary</option>
+        <option value="hex">Hexadecimal</option>
+      </select>
+
+      <label>Input message</label>
+      <textarea id="input" rows="4" placeholder='Example: HELLO  or  48656c6c6f  or  01001000 01100101'></textarea>
+
+      <div class="row" style="margin-top:8px">
+        <div>
+          <label>Word size</label>
+          <select id="wordSize"><option value="8">8-bit</option><option value="16">16-bit</option></select>
+        </div>
+        <div>
+          <label>Enable bit-flip simulation</label>
+          <select id="bitflip"><option value="none">None</option><option value="random">Flip random bit</option><option value="manual">Manual (specify index)</option></select>
+        </div>
+      </div>
+      <div id="manualIndexRow" style="display:none;margin-top:8px">
+        <label>Bit index to flip (0-based across the binary stream)</label>
+        <input id="manualIndex" type="text" placeholder="e.g. 5" />
+      </div>
+
+      <div class="controls">
+        <button id="run">Run</button>
+        <button id="clear">Clear</button>
+      </div>
+
+      <hr style="margin:12px 0;border-color:rgba(255,255,255,0.03)" />
+
+      <div class="small muted">Quick examples:</div>
+      <div class="small">Text &rarr; "HELLO", Hex &rarr; "48656c6c6f", Binary &rarr; "0100100001000101..."</div>
+
+    </section>
+
+    <aside class="card">
+      <h3>Step-by-step calculation</h3>
+      <div class="steps" id="steps">
+        <pre id="log">Press Run to see step-by-step operations...</pre>
+      </div>
+
+      <hr style="margin:12px 0;border-color:rgba(255,255,255,0.03)" />
+      <div class="flex">
+        <div>
+          <div class="muted">Current checksum</div>
+          <div id="checksum" class="chip">—</div>
+        </div>
+        <div>
+          <div class="muted">Receiver result</div>
+          <div id="receiverResult" class="chip">—</div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <footer style="padding:14px 18px;text-align:center;font-size:13px;color:#9fb0d4;border-top:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);">
+  <div style="margin-bottom:6px;color:#e6eef8;">
+    <strong>Checksum Generator & Verifier</strong> — Computer Networks Project
+  </div>
+  <div>Developed by <strong>Parth Gupta (24BCE1718)</strong> & <strong>Sambhrant Gairola (24BCE1895)</strong></div>
+  <div style="margin-top:4px;">Guided by <strong>Mr. Swaminathan A</strong>, Faculty — Computer Networks</div>
+</footer>
+
+
+  <!-- Modals -->
+<div id="devModal" class="modal">
+  <div class="paper">
+    <button class="close" onclick="toggleModal('devModal')">Close</button>
+
+    <!-- Developed By Section -->
+    <div style="text-align:center;">
+      <h2 style="margin-bottom:10px;">Developed by</h2>
+
+      <div style="display:flex;gap:30px;flex-wrap:wrap;justify-content:center;">
+        <div style="
+          text-align:center;
+          background:rgba(255,255,255,0.05);
+          padding:15px;
+          border-radius:15px;
+          width:180px;
+          transition:all 0.3s ease;
+        " 
+        onmouseover="this.style.boxShadow='0 0 20px rgba(37,99,235,0.4)';this.style.transform='scale(1.05)';"
+        onmouseout="this.style.boxShadow='none';this.style.transform='scale(1)';">
+          <img src="parth.jpg" alt="Parth Gupta"
+               style="width:150px;height:150px;border-radius:50%;object-fit:cover;border:2px solid #2563eb;">
+          <p style="margin-top:8px;font-size:14px;">
+            <strong>Parth Gupta</strong><br>
+            <span style="color:#9fb0d4;">24BCE1718</span>
+          </p>
+        </div>
+
+        <div style="
+          text-align:center;
+          background:rgba(255,255,255,0.05);
+          padding:15px;
+          border-radius:15px;
+          width:180px;
+          transition:all 0.3s ease;
+        " 
+        onmouseover="this.style.boxShadow='0 0 20px rgba(37,99,235,0.4)';this.style.transform='scale(1.05)';"
+        onmouseout="this.style.boxShadow='none';this.style.transform='scale(1)';">
+          <img src="sambhrant.jpg" alt="Sambhrant Gairola"
+               style="width:150px;height:150px;border-radius:50%;object-fit:cover;border:2px solid #2563eb;">
+          <p style="margin-top:8px;font-size:14px;">
+            <strong>Sambhrant Gairola</strong><br>
+            <span style="color:#9fb0d4;">24BCE1895</span>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <hr style="margin:25px 0;border-color:rgba(255,255,255,0.1)">
+
+    <!-- Guided By Section -->
+    <div style="text-align:center;">
+      <h2 style="margin-bottom:10px;">Guided by</h2>
+
+      <div style="display:flex;justify-content:center;">
+        <div style="
+          text-align:center;
+          background:rgba(255,255,255,0.05);
+          padding:15px;
+          border-radius:15px;
+          width:200px;
+          transition:all 0.3s ease;
+        "
+        onmouseover="this.style.boxShadow='0 0 20px rgba(16,185,129,0.4)';this.style.transform='scale(1.05)';"
+        onmouseout="this.style.boxShadow='none';this.style.transform='scale(1)';">
+          <img src="proff.jpg" alt="Swaminathan A"
+               style="width:160px;height:160px;border-radius:50%;object-fit:cover;border:2px solid #10b981;">
+          <p style="margin-top:8px;font-size:14px;">
+            <strong>Dr. Swaminathan A</strong><br>
+            <span style="color:#9fb0d4;">Faculty, Computer Networks</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+  <div id="learnModal" class="modal">
+  <div class="paper">
+    <button class="close" onclick="toggleModal('learnModal')">Close</button>
+    <h2>Learn — Internet Checksum Calculation</h2>
+
+    <p>
+      The <strong>Internet Checksum</strong> is a technique used to detect errors in network transmission.
+      It uses <strong>binary addition</strong> and <strong>1’s complement arithmetic</strong> to verify data integrity
+      in protocols like TCP, UDP, and ICMP.
+    </p>
+
+    <h3>Steps of Checksum Calculation</h3>
+    <ol>
+      <li><strong>Step 1:</strong> Convert the message into binary format. Each character is represented by its ASCII code in binary.</li>
+      <li><strong>Step 2:</strong> Divide the binary string into fixed-size words (8-bit or 16-bit).</li>
+      <li><strong>Step 3:</strong> Perform <strong>binary addition</strong> (1’s complement addition) of all words.
+        If a carry bit is produced, wrap it around and add it back to the least significant bit.</li>
+      <li><strong>Step 4:</strong> Take the <strong>1’s complement</strong> of the final sum to form the checksum.</li>
+      <li><strong>Step 5:</strong> At the receiver, add all words including the checksum. 
+        If the final result is all 1’s, the message is <strong>error-free</strong>; otherwise, it indicates <strong>corruption</strong>.</li>
+    </ol>
+
+    <h3>Example</h3>
+    <p>
+      Consider two 8-bit words:<br>
+      Word 1 = 01010101<br>
+      Word 2 = 11001100<br>
+      Sum = 01010101 + 11001100 = 1 00100001<br>
+      Wrap-around carry: 00100001 + 1 = 00100010<br>
+      1’s Complement = 11011101 → <strong>Checksum = 11011101</strong>
+    </p>
+
+    <h3>Visualization — Checksum Error Detection</h3>
+    <div style="text-align:center;margin-top:10px;">
+      <div style="
+        background:rgba(255,255,255,0.05);
+        padding:10px;
+        border-radius:12px;
+        display:inline-block;
+        transition:transform 0.3s ease, box-shadow 0.3s ease;
+      " 
+      onmouseover="this.style.transform='scale(1.03)';this.style.boxShadow='0 0 20px rgba(37,99,235,0.3)';"
+      onmouseout="this.style.transform='scale(1)';this.style.boxShadow='none';">
+
+        <!-- 🎥 Embedded YouTube Video -->
+        <iframe width="560" height="315"
+          src="https://www.youtube.com/embed/AtVWnyDDaDI"
+          title="Checksum Error Detection Explanation"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen
+          style="border-radius:10px;">
+        </iframe>
+      </div>
+
+      <p style="margin-top:8px;font-size:13px;color:#9fb0d4;">
+        Video: Explanation of checksum error detection and binary addition process.
+      </p>
+    </div>
+
+    <h3>Key Concept</h3>
+    <p>
+      The checksum ensures that even a single-bit change during transmission alters the final sum,
+      allowing the receiver to detect that an error has occurred.
+    </p>
+
+    <hr style="margin:16px 0;border-color:rgba(255,255,255,0.1)">
+    <h3>References</h3>
+    <ul style="text-align:left; line-height:1.6; color:#cbd5e1; font-size:14px;">
+      <li>Behrouz A. Forouzan, <em>Data Communications and Networking</em>, 6th Edition — Chapter 11: Error Detection and Correction.</li>
+      <li>Andrew S. Tanenbaum and David J. Wetherall, <em>Computer Networks</em>, 5th Edition — Section on Checksum and CRC Techniques.</li>
+      <li>RFC 1071 — "Computing the Internet Checksum", <a href="https://datatracker.ietf.org/doc/html/rfc1071" target="_blank" style="color:#60a5fa;">IETF Documentation</a>.</li>
+      <li>GeeksforGeeks — <a href="https://www.geeksforgeeks.org/computer-network-checksum/" target="_blank" style="color:#60a5fa;">Computer Network | Checksum</a>.</li>
+      <li>TutorialsPoint — <a href="https://www.tutorialspoint.com/error-detection-in-computer-networks" target="_blank" style="color:#60a5fa;">Error Detection in Computer Networks</a>.</li>
+    </ul>
+  </div>
+</div>
+
+
+
+
+ <div id="helpModal" class="modal">
+  <div class="paper">
+    <button class="close" onclick="toggleModal('helpModal')">Close</button>
+
+    <h2>Help — How We Developed This Website</h2>
+
+    <p>
+      This project website for <strong>Checksum Generator and Verifier</strong> was designed and implemented 
+      using basic web technologies — <strong>HTML, CSS, and JavaScript</strong>. 
+      It visually demonstrates how checksum-based error detection works in computer networks.
+    </p>
+
+    <h3>🧩 Steps Followed in Development</h3>
+    <ol>
+      <li>
+        <strong>Step 1 — Planning the Structure:</strong><br>
+        We first created a layout plan for different sections such as <em>Home, Learn, Demo, Developed By, and Help</em>. 
+        A simple modal system was chosen so that each button opens a new section within the same page (no page reloads).
+      </li>
+
+      <li>
+        <strong>Step 2 — Designing the Interface:</strong><br>
+        The website design was created using <strong>HTML</strong> for structure and <strong>CSS</strong> for styling.  
+        A dark theme with blue and green highlights was selected to give it a modern technical look.
+      </li>
+
+      <li>
+        <strong>Step 3 — Implementing Functionality:</strong><br>
+        <strong>JavaScript</strong> was used to add interactivity, including:
+        <ul style="margin-top:5px;">
+          <li>Opening and closing modals (Learn, Help, Developed By)</li>
+          <li>Checksum calculation logic (binary addition, carry wrap-around, and 1’s complement)</li>
+          <li>Error simulation and validation for sender and receiver modes</li>
+        </ul>
+      </li>
+
+      <li>
+        <strong>Step 4 — Adding Visual Elements:</strong><br>
+        We included diagrams, animations, and step-by-step explanations in the <em>Learn</em> section 
+        to make the concept easier to understand.  
+        An flowchart was added to help visualize the checksum error detection process.
+      </li>
+
+      <li>
+        <strong>Step 5 — Integrating Team and Guide Details:</strong><br>
+        “Developed by” and “Guided by” sections were added with our photos and details to acknowledge contributors.
+      </li>
+
+      <li>
+        <strong>Step 6 — Testing and Final Presentation:</strong><br>
+        The website was tested locally using a web browser to ensure that all modals, buttons, and animations worked correctly.
+      </li>
+    </ol>
+
+    <h3>🧰 Tools and Technologies Used</h3>
+    <ul>
+      <li><strong>HTML5</strong> — structure and layout of the website</li>
+      <li><strong>CSS3</strong> — for styling, dark theme, and responsive design</li>
+      <li><strong>JavaScript</strong> — for interactivity and checksum logic</li>
+      <li><strong>VS Code</strong> — as the development environment</li>
+      <li><strong>Google Chrome</strong> — for testing and debugging</li>
+    </ul>
+
+    <h3>💡 Key Learning Outcomes</h3>
+    <p>
+      Through this project, we learned how to combine theoretical networking concepts with practical web development.  
+      We gained hands-on experience in:
+      <ul>
+        <li>Implementing Internet Checksum logic in JavaScript</li>
+        <li>Creating responsive and interactive user interfaces</li>
+        <li>Understanding how web technologies can be used to demonstrate network algorithms</li>
+      </ul>
+    </p>
+
+    <p style="margin-top:15px;font-size:13px;color:#9fb0d4;">
+      <em>Note:</em> For academic purposes, this project runs entirely offline and does not require an internet connection.
+    </p>
+  </div>
+</div>
+
+
+  <script>
+    // Utilities
+    const el = id => document.getElementById(id)
+    function toggleModal(id){const m=el(id);m.style.display=(m.style.display==='flex'?'none':'flex')}
+    el('devBtn').onclick=()=>toggleModal('devModal')
+    el('learnBtn').onclick=()=>toggleModal('learnModal')
+    el('helpBtn').onclick=()=>toggleModal('helpModal')
+
+    el('bitflip').addEventListener('change',()=>{
+      el('manualIndexRow').style.display = el('bitflip').value==='manual'? 'block':'none'
+    })
+
+    function textToBinary(str){
+      return str.split('').map(ch=>{
+        const b = ch.charCodeAt(0).toString(2)
+        return b.padStart(8,'0')
+      }).join('')
+    }
+    function hexToBinary(hex){
+      hex = hex.replace(/[^0-9a-fA-F]/g,'')
+      if(hex.length%2==1) hex = '0'+hex
+      return hex.match(/.{1,2}/g).map(h=>parseInt(h,16).toString(2).padStart(8,'0')).join('')
+    }
+    function binaryNormalized(bin){
+      return bin.replace(/[^01]/g,'')
+    }
+
+    function splitWords(bitstr, wordSize){
+      // pad left with zeros to multiple of wordSize
+      const pad = (wordSize - (bitstr.length % wordSize)) % wordSize
+      bitstr = '0'.repeat(pad) + bitstr
+      const arr = []
+      for(let i=0;i<bitstr.length;i+=wordSize) arr.push(bitstr.slice(i,i+wordSize))
+      return {arr, pad}
+    }
+
+    function onesComplementAdd(words, wordSize){
+      const mask = (1<<wordSize)-1
+      let sum = 0
+      const steps = []
+      words.forEach((w,idx)=>{
+        const val = parseInt(w,2)
+        const prev = sum
+        sum = sum + val
+        // wrap-around any overflow beyond wordSize
+        const carry = sum >> wordSize
+        if(carry>0){
+          sum = (sum & mask) + carry
+        }
+        steps.push({idx, w, val, prev, sum, carry})
+      })
+      // if still overflow (multiple wraps) keep wrapping
+      while(sum>>wordSize){
+        const carry = sum>>wordSize
+        sum = (sum & mask) + carry
+        steps.push({idx:'wrap',carry, sum})
+      }
+      return {sum: sum & mask, steps}
+    }
+
+    function computeChecksum(bitstr, wordSize){
+      const {arr, pad} = splitWords(bitstr, wordSize)
+      const {sum, steps} = onesComplementAdd(arr, wordSize)
+      const mask = (1<<wordSize)-1
+      const checksum = (~sum) & mask
+      return {checksum, sum, steps, words:arr, pad}
+    }
+
+    function formatBin(n,wordSize){return n.toString(2).padStart(wordSize,'0')}
+
+    function runProcess(){
+      const mode = el('mode').value
+      const format = el('format').value
+      const input = el('input').value.trim()
+      const wordSize = parseInt(el('wordSize').value)
+      const bitflip = el('bitflip').value
+      const manualIndex = parseInt(el('manualIndex').value)
+      let bitstr=''
+      try{
+        if(format==='text') bitstr = textToBinary(input)
+        else if(format==='hex') bitstr = hexToBinary(input)
+        else bitstr = binaryNormalized(input)
+      }catch(e){alert('Error converting input: '+e);return}
+
+      const originalBitstr = bitstr
+      // simulate bit flip if requested
+      let flippedInfo = null
+      if(bitflip==='random' && bitstr.length>0){
+        const idx = Math.floor(Math.random()*bitstr.length)
+        bitstr = bitstr.substring(0,idx) + (bitstr[idx]==='0'?'1':'0') + bitstr.substring(idx+1)
+        flippedInfo = {type:'random', idx}
+      } else if(bitflip==='manual'){
+        if(Number.isInteger(manualIndex) && manualIndex>=0 && manualIndex<bitstr.length){
+          const idx = manualIndex
+          bitstr = bitstr.substring(0,idx) + (bitstr[idx]==='0'?'1':'0') + bitstr.substring(idx+1)
+          flippedInfo = {type:'manual', idx}
+        } else {alert('Invalid manual index');return}
+      }
+
+      // Sender
+      const out = []
+      const stepsEl = []
+      if(mode==='sender'){
+        const {checksum,sum,steps,words,pad} = computeChecksum(bitstr, wordSize)
+        stepsEl.push('Input (binary, padded if needed): ' + bitstr)
+        if(pad>0) stepsEl.push('Padded with '+pad+' leading zeros to align to word size')
+        steps.forEach(s=>{
+          if(s.idx==='wrap') stepsEl.push(`Wrap-around: carry=${s.carry}, sum=${formatBin(s.sum,wordSize)}`)
+          else stepsEl.push(`Add word #${s.idx+1}: ${s.w} (=${s.val}), prevSum=${formatBin(s.prev,wordSize)}, carry=${s.carry}, newSum=${formatBin(s.sum,wordSize)}`)
+        })
+        stepsEl.push('Final sum (1\'s complement): '+formatBin(sum,wordSize))
+        stepsEl.push('Checksum = 1\'s complement of sum = '+formatBin(checksum,wordSize))
+        if(flippedInfo) stepsEl.push(`(Note: bit-flip simulated: ${flippedInfo.type} at index ${flippedInfo.idx})`)
+        el('checksum').innerText = formatBin(checksum,wordSize)
+        el('receiverResult').innerText = '—'
+        el('log').innerText = stepsEl.join('\n')
+        // store output for download
+        window._lastRun = {mode,format,input,wordSize,bitflip,manualIndex,originalBitstr,bitstr,checksum:formatBin(checksum,wordSize),steps:stepsEl}
+      }else{
+        // Receiver: assume input includes message only; we ask the user to include checksum appended if needed
+        stepsEl.push('Receiver input (binary): ' + bitstr)
+        const {checksum:_, sum, steps, words, pad} = computeChecksum(bitstr, wordSize)
+        steps.forEach(s=>{
+          if(s.idx==='wrap') stepsEl.push(`Wrap-around: carry=${s.carry}, sum=${formatBin(s.sum,wordSize)}`)
+          else stepsEl.push(`Add word #${s.idx+1}: ${s.w} (=${s.val}), prevSum=${formatBin(s.prev,wordSize)}, carry=${s.carry}, newSum=${formatBin(s.sum,wordSize)}`)
+        })
+        stepsEl.push('Final sum = '+formatBin(sum,wordSize))
+        const mask = (1<<wordSize)-1
+        if(sum === mask) {
+          stepsEl.push('Result is all 1s -> Message VALID')
+          el('receiverResult').innerText = 'VALID'
+        } else {
+          stepsEl.push('Result is NOT all 1s -> Message CORRUPTED')
+          el('receiverResult').innerText = 'CORRUPTED'
+        }
+        el('checksum').innerText = '—'
+        el('log').innerText = stepsEl.join('\n')
+        window._lastRun = {mode,format,input,wordSize,bitflip,manualIndex,originalBitstr,bitstr,result: el('receiverResult').innerText,steps:stepsEl}
+      }
+    }
+
+    el('run').addEventListener('click',runProcess)
+    el('clear').addEventListener('click',()=>{el('input').value='';el('log').innerText='Press Run to see step-by-step operations...';el('checksum').innerText='—';el('receiverResult').innerText='—';window._lastRun=null})
+
+    // Download button: produce a .txt report containing inputs, steps and outputs
+    el('downloadBtn').addEventListener('click',()=>{
+      const rec = window._lastRun
+      if(!rec){alert('No run data available. Run the process first.');return}
+      let txt = 'Checksum Generator — Detailed Report\n\n'
+      txt += 'Mode: '+rec.mode+'\nFormat: '+rec.format+'\nWord size: '+rec.wordSize+'\nOriginal input: '+rec.input+'\n\n'
+      txt += 'Step-by-step:\n'+rec.steps.join('\n')+'\n\n'
+      if(rec.mode==='sender') txt += 'Checksum: '+rec.checksum+'\n'
+      else txt += 'Verification result: '+rec.result+'\n'
+      const blob = new Blob([txt], {type:'text/plain'})
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'checksum_report.txt'
+      a.click()
+      URL.revokeObjectURL(url)
+    })
+
+    // simple 'Developed by' content injection placeholder
+    // You should replace with your real names and photos
+
+  </script>
+</body>
+</html>
